@@ -1,5 +1,5 @@
 # Large training datasets
-Training_files/preprocessed_csv/botnet/storm.csv
+Training_files/preprocessed_csv/
 
 # Python
 __pycache__/
@@ -20,10 +20,6 @@ ENV/
 *.swo
 .DS_Store
 
-# Model outputs
-*.pkl
-*.joblib
-
-# Generated files
+# Generated output files
 flows_preprocessed_with_prediction.csv
 result.txt
