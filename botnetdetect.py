@@ -169,8 +169,8 @@ def generate_connections(file_path, flows_dict):
 		ether_pkt = Ether(pkt_data)
 		if ('type' not in ether_pkt.fields):
 			ether_pkt = CookedLinux(pkt_data)
-		elif ether_pkt.type != 0x0800:
-			assert (ether_pkt.type == 2054)
+   
+		if not hasattr(ether_pkt,"type") or ether_pkt.type != 0x0800:
 			continue
 
 		current_time_stamp = ether_pkt.time * MICROSECOND
