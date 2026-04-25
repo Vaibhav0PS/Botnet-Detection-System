@@ -1,75 +1,200 @@
-# Unsupervised-Network-Monitoring-and-Botnet-Detection
-Hybrid Model for Botnet Detection through Real-Time Network Captures
+# Unsupervised Network Monitoring and Botnet Detection
 
-<h2> Running Instructions – </h2>
+Hybrid botnet detection tool for offline PCAP analysis. The project reads packet captures, converts TCP/UDP traffic into 5-tuple network flows, extracts statistical flow features, and labels each source host as `Benign` or `Botnet` using the pre-trained models in `Models/`.
 
+## What the Tool Does
+
+1. Reads a `.pcap` file with Scapy.
+2. Groups packets into flows by:
+   - source IP
+   - destination IP
+   - source port
+   - destination port
+   - protocol
+3. Extracts flow-level features such as packet counts, payload statistics, inter-arrival times, packet-size variance, duration, and packets per second.
+4. Cleans and normalizes the extracted features.
+5. Predicts each flow using a hybrid approach:
+   - KMeans cluster rules for obvious benign/botnet-like clusters.
+   - Random Forest fallback classifier for remaining flows.
+6. Aggregates flow predictions per source IP.
+7. Writes host-level and flow-level results.
+
+## Quick Start
+
+Install the Python dependencies, then run:
+
+```bash
+python botnetdetect.py Sample_Testing/zeus1-117.10.28.pcap
 ```
-python botnet_detect.py <Absolute Path of PCAP File>
+
+You can also pass any absolute or relative PCAP path:
+
+```bash
+python botnetdetect.py path/to/capture.pcap
 ```
 
-This will create a file “result.txt” in the directory where the script executes. It will also generate a csv 
-called “flows_preprocessed_with_prediction.csv”, that shows classification of every flow detected in 
-the test PCAP file as benign or malicious.
+## Output Files
 
-For generating Plots and Accuracy Report -
+Running `botnetdetect.py` creates or refreshes these files in the project root:
 
+- `result.txt`: host-level classification for each source IP.
+- `flows_preprocessed_with_prediction.csv`: flow-level features with predicted labels.
+
+Example `result.txt` format:
+
+```text
+10.0.2.15 , Botnet
+186.18.3.72 , Benign
 ```
-python botnet_detect.py Sample_Testing/zeus1-117.10.28.pcap
+
+The current host decision rule labels a source IP as `Botnet` when at least 5% of its analyzed flows are predicted as botnet traffic. Otherwise, it is labeled `Benign`.
+
+## Project Structure
+
+```text
+.
+├── botnetdetect.py                 # Main PCAP analysis and prediction script
+├── evaluate_model.py               # Evaluation report and confusion matrix from generated predictions
+├── prepare_dataset.py              # Combines preprocessed CSV files into training_dataset.csv
+├── retrain_models.py               # Retrains KMeans and Random Forest artifacts from training_dataset.csv
+├── train_model.py                  # Simple Random Forest retraining helper
+├── plot_correlation.py             # Correlation heatmap for generated flow features
+├── plot_kmeans.py                  # PCA + KMeans visualization for generated flow features
+├── training_dataset.csv            # Combined training data
+├── Models/
+│   ├── cluster.pkl                 # KMeans model used by botnetdetect.py
+│   ├── flow_predictor.joblib        # Flow classifier used by botnetdetect.py
+│   ├── label_encoder.pkl           # Protocol encoder
+│   └── mms.pkl                     # MinMaxScaler for flow features
+├── Sample_Testing/                 # Example PCAP files
+└── Training_files/
+    ├── parser.py                   # Parser for Ethernet PCAP training data
+    ├── parser1.py                  # Parser variant for Linux cooked captures
+    ├── model.py                    # Legacy model training/evaluation workflow
+    ├── preprocessed_csv/           # Expected source folder for prepared CSV files
+    └── Models/                     # Alternate training output location
 ```
 
-<h2> Project Structure </h2>
+## Main Scripts
 
-* All the pickled models are present in the “Models” Directory.
-* Folder wise and total pre-processed data is present in the  <i>“Training_files/pre_processed_csv”</i> Directory.
-* All the Source code for model training is present in the “Training_data”.
-  * Running model.py will take the pre-processed csv files and retrain all the models and output the training and testing information.
-  * Running parser.py will take a directory and use all its directory-wise PCAP files to generate a csv of traffic flow features per directory.
-* A documentation pdf named “Tool Documentation” is also submitted. It contains details about the various details of the tool.
+### `botnetdetect.py`
 
-<h2> Testing and Evaluation – </h2>
+The main executable script. It accepts a PCAP path as the first command-line argument, extracts flows, loads models from `Models/`, writes per-flow predictions to `flows_preprocessed_with_prediction.csv`, and writes per-host decisions to `result.txt`.
 
-Upon running botnetdetect.py with a test PCAP file, the tool generates a result.txt file in the current 
-directory. resut.txt file labels each unique host in the PCAP file as benign or malicious.
+```bash
+python botnetdetect.py Sample_Testing/Botnet.pcap
+```
 
-The structure of result.txt is- </br>
- <Host IP Address 1>, <Benign/Malicious> </br>
- <Host IP Address 2>, <Benign/Malicious> </br>
- <Host IP Address 3>, <Benign/Malicious> </br>
+### `evaluate_model.py`
 
-<h2> Submission Directory Structure </h2>
+Loads `flows_preprocessed_with_prediction.csv`, maps labels to numeric values, runs the saved flow classifier, prints a confusion matrix and classification report, and displays a confusion-matrix plot.
 
-![Directory Structure](https://i.postimg.cc/wTKQtjFr/Screenshot-2021-04-10-134127.png)
+```bash
+python evaluate_model.py
+```
 
-<h2> Solution Summary </h2>
+### `plot_correlation.py`
 
-We have used traffic flow for analysis which is defined by a 5-tuple of (source IP, Destination IP, Source Port, Destination Port, Protocol). The flows originating from the host IP have been given the label of the host, i.e. for data captured on a Benign system, only the flows originating from the benign system are labelled benign, rest flows are not considered/ignored. The flows have been filtered using port, length, duration and protocol data. We have then extracted 22 features from each of the filtered network traffic flow. We have also done correlation and PCA loading based feature ranking. Top 16 features were chosen after analysis. Next a KNN based clustering has been performed to identify benign and malicious clusters and to remove the obvious benign flows. Finally,a boosted random forest is used for classifying the remainder of the flows into malicious and benign. The result of this flow classification is used to score every host, based on the percentage of malicious flows generated by the host. A threshold of 1% is set to flag the hosts as malicious, i.e. if more than 1% of flows originated by a host are malicious, then the host is classified malicious.
+Creates a correlation heatmap from the numeric columns in `flows_preprocessed_with_prediction.csv`.
 
-<h2> Dataset </h2>
+```bash
+python plot_correlation.py
+```
 
-Due to GitHub file size limits, the large training dataset (storm.csv - 95MB) is not included in this repository.
+### `plot_kmeans.py`
 
-To retrain the models, you'll need to:
-1. Obtain botnet traffic PCAP files (Storm, Zeus, Vinchuca)
-2. Place them in appropriate directories
-3. Run `Training_files/parser.py` to generate CSV files
-4. Run `Training_files/model.py` to train models
+Projects generated flow features to two PCA components, runs KMeans on the projection, and displays a clustering plot.
 
-Pre-trained models are included in the `Models/` directory for immediate use.
+```bash
+python plot_kmeans.py
+```
 
-<h2> Requirements </h2>
+### `prepare_dataset.py`
 
-* sklearn >= 0.22.1
-* numpy >= 1.16.3
-* scipy
-* pandas >= 0.25.3
-* scapy
-* matplotlib
-* seaborn
-* joblib
-* natsort
+Combines CSV files from `Training_files/preprocessed_csv/**/*.csv` into `training_dataset.csv`.
 
-<h2> Other Assumptions </h2>
+```bash
+python prepare_dataset.py
+```
 
-* The result.txt contains pairs of IP and Label. Each unique IP in the test file is labelled by the tool. Thus, the tool classifies traffic as malicious or benign.
-* The flow-wise classification is also shown in flows_preprocessed_with_prediction.csv file.
-* The runtime on the current system with i7 @ 1.8 GHz and 16 GB RAM is 4-5 minutes for a 100 Mb PCAP file. Please ensure appropriate time is given based on testing system specs
+### `retrain_models.py`
+
+Retrains a KMeans model, Random Forest model, label encoder, and scaler from `training_dataset.csv`. This script currently saves its artifacts under `Training_files/Models/`.
+
+```bash
+python retrain_models.py
+```
+
+If you want `botnetdetect.py` to use newly retrained artifacts, copy or save the retrained files into the root `Models/` directory with these names:
+
+- `cluster.pkl`
+- `flow_predictor.joblib`
+- `label_encoder.pkl`
+- `mms.pkl`
+
+## Requirements
+
+The project uses:
+
+- Python 3.x
+- numpy
+- pandas
+- scikit-learn
+- scipy
+- scapy
+- matplotlib
+- seaborn
+- joblib
+- natsort
+
+Install the dependencies with:
+
+```bash
+pip install numpy pandas scikit-learn scipy scapy matplotlib seaborn joblib natsort
+```
+
+The repository also contains a local `botnet_env/` virtual environment. For a fresh setup, creating a new virtual environment is usually cleaner than relying on a copied environment.
+
+## Dataset and Training Notes
+
+The detection pipeline expects preprocessed flow CSV files with the same feature layout used by the included models. Training parsers in `Training_files/` were written for a dataset layout similar to:
+
+```text
+Training_files/
+└── Botnet_Detection_Dataset/
+    └── Botnet/
+        ├── torrent/
+        └── storm/
+```
+
+The parser scripts generate flow feature CSVs from PCAP directories. `prepare_dataset.py` then merges preprocessed CSV files into `training_dataset.csv`, and `retrain_models.py` can create updated model artifacts.
+
+## Feature Summary
+
+For each flow, the tool computes features including:
+
+- total packets
+- null packets
+- small packet count and percentage
+- flow duration
+- average payload
+- packet length standard deviation
+- most frequent packet length ratio
+- payload per second
+- average and median inter-arrival time
+- packet-size variance
+- maximum packet size
+- average packet length
+- first packet length
+- average packets per second
+
+During preprocessing, IP address columns are removed from model input, protocol is label-encoded, selected send/receive-only timing features are dropped, and remaining numeric values are scaled with the saved MinMaxScaler.
+
+## Notes and Assumptions
+
+- Only IPv4 TCP and UDP traffic is analyzed.
+- Flows with source ports at or below `1000` and flows with `2` or fewer packets are filtered out before prediction.
+- `result.txt` contains one host-level label per source IP seen in the processed capture.
+- `flows_preprocessed_with_prediction.csv` contains detailed flow-level predictions and is useful for debugging, reporting, and visualization.
+- Model pickle/joblib files can be sensitive to scikit-learn version changes. `botnetdetect.py` includes compatibility fallbacks for older saved scaler/KMeans artifacts and a cluster-only fallback if the flow classifier cannot be loaded.
+
