@@ -1,11 +1,11 @@
 import os, time
 import sys
 import numpy
+from collections import Counter
 from scapy.utils import RawPcapReader
 from scapy.layers.l2 import Ether, CookedLinux
 from scapy.layers.inet import IP, TCP, UDP
 from scapy.packet import NoPayload
-from scipy import stats
 import numpy as np
 import csv
 import pandas as pd
@@ -101,23 +101,27 @@ class Flow:
 			percent_of_small_packets = float(self.small_packets * 100) / float(self.total_num_packets)
 
 
-		stddev_packet_length = numpy.std(self.packet_length)
-		mode_result = stats.mode(self.packet_length)
-		freq_packet_length = mode_result[1][0]
-		avg_inter_times = numpy.mean(self.inter_arrival_times)
-		avg_sent_inter_times = numpy.mean(self.inter_arrival_times_send)
-		avg_rec_inter_times = numpy.mean(self.inter_arrival_times_receive)
+		stddev_packet_length = np.std(self.packet_length) if len(self.packet_length) > 0 else 0
 
-		med_inter_times = numpy.median(self.inter_arrival_times)
-		med_sent_inter_times = numpy.median(self.inter_arrival_times_send)
-		med_rec_inter_times = numpy.median(self.inter_arrival_times_receive)
+		if len(self.packet_length) > 0:
+			counter = Counter(self.packet_length)
+			mode_packet_length, freq_packet_length = counter.most_common(1)[0]
+		else:
+			mode_packet_length, freq_packet_length = 0, 0
 
+		avg_inter_times = np.mean(self.inter_arrival_times) if len(self.inter_arrival_times) > 0 else 0
+		avg_sent_inter_times = np.mean(self.inter_arrival_times_send) if len(self.inter_arrival_times_send) > 0 else 0
+		avg_rec_inter_times = np.mean(self.inter_arrival_times_receive) if len(self.inter_arrival_times_receive) > 0 else 0
 
-		var_packet_size = numpy.var(self.packet_size)
-		var_packet_size_sent = numpy.var(self.packet_size_sent)
-		var_packet_size_rec = numpy.var(self.packet_size_receive)
+		med_inter_times = np.median(self.inter_arrival_times) if len(self.inter_arrival_times) > 0 else 0
+		med_sent_inter_times = np.median(self.inter_arrival_times_send) if len(self.inter_arrival_times_send) > 0 else 0
+		med_rec_inter_times = np.median(self.inter_arrival_times_receive) if len(self.inter_arrival_times_receive) > 0 else 0
 
-		max_packet_size = max(self.packet_size)
+		var_packet_size = np.var(self.packet_size) if len(self.packet_size) > 0 else 0
+		var_packet_size_sent = np.var(self.packet_size_sent) if len(self.packet_size_sent) > 0 else 0
+		var_packet_size_rec = np.var(self.packet_size_receive) if len(self.packet_size_receive) > 0 else 0
+
+		max_packet_size = max(self.packet_size) if len(self.packet_size) > 0 else 0
 		# Reconnection , total number of bytes --  is this file size?, 
 		# average bits/s =  total payload / total duration ?
 
@@ -134,8 +138,8 @@ class Flow:
 
 		# this was in first paper
 
-		average_packet_length = numpy.mean(self.packet_length)
-		first_packet_length = self.packet_length[0]
+		average_packet_length = np.mean(self.packet_length) if len(self.packet_length) > 0 else 0
+		first_packet_length = self.packet_length[0] if len(self.packet_length) > 0 else 0
 		if (self.total_duration > 0):
 			average_packet_ps = float(self.count * self.MICROSECOND) / float(self.total_duration)
 		else:
@@ -145,6 +149,7 @@ class Flow:
 		file_features = [self.src_ip, self.dst_ip, self.sport, self.dport, self.protocol]
 
 		file_features += file_feature_list_1 + file_feature_list_2 + file_feature_list_3 + file_feature_list_4
+		file_features = [0 if (isinstance(x, float) and np.isnan(x)) else x for x in file_features]
 
 		return file_features
 
@@ -369,13 +374,25 @@ def predict(features):
 
 	features = np.array(features, dtype=float)
 	mms = pk.load(open(osp.join("Models", "mms.pkl"),'rb'))
+	if not hasattr(mms, "clip"):
+		# Backward compatibility for scalers pickled with older sklearn versions.
+		mms.clip = False
 	features = mms.transform(features)
 
 	cluster = pk.load(open(osp.join("Models", "cluster.pkl"),'rb'))
+	if not hasattr(cluster, "_n_threads"):
+		# Backward compatibility for KMeans models pickled with older sklearn versions.
+		cluster._n_threads = 1
 	cluster_labels = cluster.predict(features)
 
-	clf = load(osp.join('Models', 'flow_predictor.joblib'))
-	model_labels = clf.predict(features)
+	try:
+		clf = load(osp.join('Models', 'flow_predictor.joblib'))
+		model_labels = clf.predict(features)
+	except Exception as ex:
+		# Fallback when legacy joblib models are incompatible with current sklearn.
+		print("Warning: flow_predictor.joblib is incompatible with current sklearn. "
+			  "Using cluster-only prediction fallback. Details:", ex)
+		model_labels = np.zeros(len(cluster_labels), dtype=int)
 
 	labels = []
 
