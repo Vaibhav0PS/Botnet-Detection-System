@@ -49,6 +49,35 @@ Example `result.txt` format:
 
 The current host decision rule labels a source IP as `Botnet` when at least 5% of its analyzed flows are predicted as botnet traffic. Otherwise, it is labeled `Benign`.
 
+## Optional Streaming Dashboard
+
+The project also includes an additive real-time style pipeline. It does not replace the existing `botnetdetect.py` workflow.
+
+Install the optional Python dependencies:
+
+```bash
+pip install -r requirements-streaming.txt
+```
+
+Start Kafka:
+
+```bash
+docker compose up -d
+```
+
+In separate terminals, run the detector consumer, backend API, PCAP replay producer, and dashboard:
+
+```bash
+python -m consumer.detection_consumer
+uvicorn backend.main:app --reload
+python -m producer.pcap_replay_producer Sample_Testing/Botnet.pcap
+cd dashboard/frontend-app
+npm install
+npm run dev
+```
+
+The backend exposes dashboard data at `http://localhost:8000/api/summary`, and the Vite dashboard runs at the URL printed by `npm run dev`.
+
 ## Project Structure
 
 ```text
@@ -197,4 +226,3 @@ During preprocessing, IP address columns are removed from model input, protocol 
 - `result.txt` contains one host-level label per source IP seen in the processed capture.
 - `flows_preprocessed_with_prediction.csv` contains detailed flow-level predictions and is useful for debugging, reporting, and visualization.
 - Model pickle/joblib files can be sensitive to scikit-learn version changes. `botnetdetect.py` includes compatibility fallbacks for older saved scaler/KMeans artifacts and a cluster-only fallback if the flow classifier cannot be loaded.
-

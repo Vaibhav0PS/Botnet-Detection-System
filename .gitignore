@@ -12,6 +12,7 @@ __pycache__/
 venv/
 env/
 ENV/
+botnet_env/
 
 # IDE
 .vscode/
@@ -23,3 +24,9 @@ ENV/
 # Generated output files
 flows_preprocessed_with_prediction.csv
 result.txt
+backend/*.db
+backend/botnet_stream.db
+dashboard/frontend-app/node_modules/
+dashboard/frontend-app/dist/
+logs/
+*.log
