@@ -22,7 +22,75 @@ body {
   align-items: center;
   display: flex;
   justify-content: space-between;
+  margin-bottom: 24px;
+  background: #ffffff;
+  padding: 18px 24px;
+  border-radius: 12px;
+  border: 1px solid #d7e0e6;
+  box-shadow: 0 4px 12px rgba(39, 57, 74, 0.03);
+}
+
+.header-nav {
+  display: flex;
+  gap: 8px;
+  background: #f1f4f6;
+  padding: 6px;
+  border-radius: 10px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #607080;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.nav-item:hover {
+  background: #ffffff;
+  color: #1f2933;
+}
+
+.nav-item.active {
+  background: #ffffff;
+  color: #1f6f8b;
+  box-shadow: 0 4px 10px rgba(39, 57, 74, 0.08);
+}
+
+.panel-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 20px;
+}
+
+.panel-subtitle {
+  color: #607080;
+  font-size: 14px;
+  margin-top: -10px;
+  margin-bottom: 20px;
+}
+
+.proto-tag {
+  background: #eef1f4;
+  color: #52616f;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.info-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #475a6b;
 }
 
 h1,

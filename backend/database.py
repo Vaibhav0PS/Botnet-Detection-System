@@ -44,6 +44,16 @@ def init_db(conn):
             botnet_percentage REAL,
             reason TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS packets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            src_ip TEXT,
+            dst_ip TEXT,
+            protocol TEXT,
+            length INTEGER,
+            info TEXT
+        );
         """
     )
     conn.commit()
@@ -56,6 +66,24 @@ def rows(conn, query, params=()):
 def one(conn, query, params=()):
     row = conn.execute(query, params).fetchone()
     return dict(row) if row else None
+
+
+def insert_packet(conn, event):
+    conn.execute(
+        """
+        INSERT INTO packets (timestamp, src_ip, dst_ip, protocol, length, info)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            event["timestamp"],
+            event["src_ip"],
+            event["dst_ip"],
+            event["protocol"],
+            event["length"],
+            event["info"],
+        ),
+    )
+    conn.commit()
 
 
 def insert_prediction(conn, event):

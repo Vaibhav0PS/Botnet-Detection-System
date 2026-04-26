@@ -80,6 +80,11 @@ def flows(limit: int = 100):
     return rows(conn, "SELECT * FROM flows ORDER BY id DESC LIMIT ?", (limit,))
 
 
+@app.get("/api/packets")
+def packets(limit: int = 100):
+    return rows(conn, "SELECT * FROM packets ORDER BY id DESC LIMIT ?", (limit,))
+
+
 @app.get("/api/alerts")
 def alerts(limit: int = 50):
     return rows(conn, "SELECT * FROM alerts ORDER BY id DESC LIMIT ?", (limit,))
@@ -190,6 +195,7 @@ def clear_data():
         conn.execute("DELETE FROM flows")
         conn.execute("DELETE FROM hosts")
         conn.execute("DELETE FROM alerts")
+        conn.execute("DELETE FROM packets")
         conn.commit()
         
         return {

@@ -1,7 +1,7 @@
 import argparse
 import time
 from datetime import datetime, timezone
-
+from scapy.layers.inet import IP, TCP, UDP
 from scapy.layers.l2 import CookedLinux, Ether
 from scapy.utils import RawPcapReader
 
@@ -37,18 +37,31 @@ def publish_window(producer, topic, flows, window_started_at, window_ended_at):
     return len(records)
 
 
+RAW_PACKETS_TOPIC = "raw_packets"
+
+
+def publish_packets(producer, topic, packet_metadata_list):
+    print(f"[PRODUCER] Publishing {len(packet_metadata_list)} raw packets to {topic}")
+    for pkt in packet_metadata_list:
+        producer.send(topic, value=pkt)
+    producer.flush()
+
+
 def replay_pcap(
     pcap_path,
     bootstrap_servers="localhost:9092",
     topic="flow_features",
     window_seconds=5.0,
     replay_delay=1.0,
+    packet_sample_rate=5,
 ):
     producer = create_producer(bootstrap_servers)
     flows = {}
     window_start = None
     window_end = None
     published = 0
+    
+    current_window_packets = []
 
     for pkt_data, pkt_metadata in RawPcapReader(pcap_path):
         ts = packet_timestamp(pkt_data)
@@ -56,21 +69,52 @@ def replay_pcap(
             window_start = ts
             window_end = window_start + window_seconds
 
-        if ts >= window_end and flows:
-            published += publish_window(
-                producer,
-                topic,
-                flows,
-                datetime.fromtimestamp(window_start, timezone.utc).isoformat(),
-                datetime.fromtimestamp(window_end, timezone.utc).isoformat(),
-            )
+        if ts >= window_end:
+            if flows:
+                published += publish_window(
+                    producer,
+                    topic,
+                    flows,
+                    datetime.fromtimestamp(window_start, timezone.utc).isoformat(),
+                    datetime.fromtimestamp(window_end, timezone.utc).isoformat(),
+                )
+            
+            # Also publish the sampled raw packets for this window
+            if current_window_packets:
+                publish_packets(producer, RAW_PACKETS_TOPIC, current_window_packets)
+                current_window_packets = []
+                
             flows = {}
             time.sleep(replay_delay)
             while ts >= window_end:
                 window_start = window_end
                 window_end = window_start + window_seconds
 
-        add_packet_to_flows(pkt_data, pkt_metadata, flows)
+        # Add to flows (existing logic)
+        key = add_packet_to_flows(pkt_data, pkt_metadata, flows)
+        
+        # Sample raw packet metadata for live monitoring
+        if key and len(current_window_packets) < packet_sample_rate:
+            try:
+                ether_pkt = Ether(pkt_data)
+                if ether_pkt.haslayer(IP):
+                    ip = ether_pkt[IP]
+                    proto = "OTHER"
+                    if ip.haslayer(TCP): proto = "TCP"
+                    elif ip.haslayer(UDP): proto = "UDP"
+                    
+                    packet_event = {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "src_ip": ip.src,
+                        "dst_ip": ip.dst,
+                        "protocol": proto,
+                        "length": pkt_metadata.wirelen,
+                        "info": f"{proto} {ip.src} -> {ip.dst}"
+                    }
+                    current_window_packets.append(packet_event)
+            except Exception as e:
+                # print(f"Error sampling packet: {e}")
+                pass
 
     if flows and window_start is not None:
         published += publish_window(
@@ -80,6 +124,9 @@ def replay_pcap(
             datetime.fromtimestamp(window_start, timezone.utc).isoformat(),
             datetime.fromtimestamp(window_end, timezone.utc).isoformat(),
         )
+        if current_window_packets:
+            publish_packets(producer, RAW_PACKETS_TOPIC, current_window_packets)
+            
     producer.close()
     return published
 

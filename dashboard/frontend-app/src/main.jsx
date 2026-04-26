@@ -10,6 +10,8 @@ import {
   Upload,
   RefreshCw,
   Trash2,
+  List,
+  LayoutDashboard,
 } from "lucide-react";
 import {
   Bar,
@@ -38,6 +40,7 @@ function usePollingData() {
     alerts: [],
     timeseries: [],
     protocols: [],
+    packets: [],
     error: "",
   });
 
@@ -46,7 +49,7 @@ function usePollingData() {
 
     async function load() {
       try {
-        const [summary, flows, hosts, alerts, timeseries, protocols] = await Promise.all(
+        const [summary, flows, hosts, alerts, timeseries, protocols, packets] = await Promise.all(
           [
             "/api/summary",
             "/api/flows?limit=60",
@@ -54,10 +57,11 @@ function usePollingData() {
             "/api/alerts?limit=20",
             "/api/timeseries",
             "/api/protocols",
+            "/api/packets?limit=50",
           ].map((path) => fetch(`${API_BASE}${path}`).then((response) => response.json())),
         );
         if (active) {
-          setState({ summary, flows, hosts, alerts, timeseries, protocols, error: "" });
+          setState({ summary, flows, hosts, alerts, timeseries, protocols, packets, error: "" });
         }
       } catch (error) {
         if (active) {
@@ -93,6 +97,59 @@ function StatCard({ icon: Icon, label, value, tone }) {
 
 function Badge({ value }) {
   return <span className={`badge ${value === "Botnet" ? "danger" : "safe"}`}>{value}</span>;
+}
+
+function LivePacketMonitor({ packets }) {
+  const handleRefresh = () => {
+    // Polling will handle this, but giving user a button feels better
+    window.location.reload();
+  };
+
+  return (
+    <div className="panel wide">
+      <div className="panel-header-actions">
+        <div>
+          <h2>Live Packet Monitor</h2>
+          <p className="panel-subtitle">Independent raw packet stream (sampled)</p>
+        </div>
+        <button className="action-button sync" onClick={() => window.location.reload()}>
+          <RefreshCw size={16} />
+          Refresh View
+        </button>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Source</th>
+              <th>Destination</th>
+              <th>Protocol</th>
+              <th>Length</th>
+              <th>Info</th>
+            </tr>
+          </thead>
+          <tbody>
+            {packets.length === 0 && (
+              <tr>
+                <td colSpan="6" className="empty">No packets received yet. Start a PCAP replay.</td>
+              </tr>
+            )}
+            {packets.map((pkt) => (
+              <tr key={pkt.id}>
+                <td>{pkt.timestamp?.slice(11, 19)}</td>
+                <td>{pkt.src_ip}</td>
+                <td>{pkt.dst_ip}</td>
+                <td><span className="proto-tag">{pkt.protocol}</span></td>
+                <td>{pkt.length} B</td>
+                <td className="info-cell">{pkt.info}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function UploadPanel() {
@@ -216,7 +273,9 @@ function UploadPanel() {
 }
 
 function App() {
-  const { summary, flows, hosts, alerts, timeseries, protocols, error } = usePollingData();
+  const { summary, flows, hosts, alerts, timeseries, protocols, packets, error } = usePollingData();
+  const [view, setView] = useState("dashboard");
+
   const distribution = useMemo(
     () => [
       { name: "Benign", value: summary.benign_flows || 0 },
@@ -228,10 +287,28 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
+        <div className="header-main">
           <h1>Botnet Stream Monitor</h1>
-          <p>Live flow predictions from replayed PCAP traffic</p>
+          <p>Live network security monitoring dashboard</p>
         </div>
+        
+        <nav className="header-nav">
+          <button 
+            className={`nav-item ${view === "dashboard" ? "active" : ""}`}
+            onClick={() => setView("dashboard")}
+          >
+            <LayoutDashboard size={18} />
+            Overview
+          </button>
+          <button 
+            className={`nav-item ${view === "packets" ? "active" : ""}`}
+            onClick={() => setView("packets")}
+          >
+            <List size={18} />
+            Live Packets
+          </button>
+        </nav>
+
         <div className="connection-state">
           <span className={error ? "dot offline" : "dot"} />
           {error ? "API offline" : "Polling every 2s"}
@@ -240,140 +317,146 @@ function App() {
 
       <UploadPanel />
 
-      <section className="stats-grid">
-        <StatCard icon={Activity} label="Total flows" value={summary.total_flows} tone="blue" />
-        <StatCard icon={ShieldCheck} label="Benign flows" value={summary.benign_flows} tone="green" />
-        <StatCard icon={AlertTriangle} label="Botnet flows" value={summary.botnet_flows} tone="red" />
-        <StatCard icon={MonitorDot} label="Total hosts" value={summary.total_hosts} tone="teal" />
-        <StatCard icon={Database} label="Botnet hosts" value={summary.botnet_hosts} tone="amber" />
-        <StatCard icon={BarChart3} label="Active alerts" value={summary.active_alerts} tone="gray" />
-      </section>
+      {view === "packets" ? (
+        <LivePacketMonitor packets={packets} />
+      ) : (
+        <>
+          <section className="stats-grid">
+            <StatCard icon={Activity} label="Total flows" value={summary.total_flows} tone="blue" />
+            <StatCard icon={ShieldCheck} label="Benign flows" value={summary.benign_flows} tone="green" />
+            <StatCard icon={AlertTriangle} label="Botnet flows" value={summary.botnet_flows} tone="red" />
+            <StatCard icon={MonitorDot} label="Total hosts" value={summary.total_hosts} tone="teal" />
+            <StatCard icon={Database} label="Botnet hosts" value={summary.botnet_hosts} tone="amber" />
+            <StatCard icon={BarChart3} label="Active alerts" value={summary.active_alerts} tone="gray" />
+          </section>
 
-      <section className="chart-grid">
-        <div className="panel">
-          <h2>Flows Over Time</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={timeseries}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" hide />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="benign" stroke="#26734d" strokeWidth={2} />
-              <Line type="monotone" dataKey="botnet" stroke="#b42318" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="panel">
-          <h2>Prediction Mix</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={distribution} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90}>
-                <Cell fill="#26734d" />
-                <Cell fill="#b42318" />
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="panel">
-          <h2>Protocol Distribution</h2>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={protocols}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="protocol" />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#1f6f8b" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
+          <section className="chart-grid">
+            <div className="panel">
+              <h2>Flows Over Time</h2>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={timeseries}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="time" hide />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="benign" stroke="#26734d" strokeWidth={2} />
+                  <Line type="monotone" dataKey="botnet" stroke="#b42318" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="panel">
+              <h2>Prediction Mix</h2>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={distribution} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90}>
+                    <Cell fill="#26734d" />
+                    <Cell fill="#b42318" />
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="panel">
+              <h2>Protocol Distribution</h2>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={protocols}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="protocol" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#1f6f8b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
 
-      <section className="content-grid">
-        <div className="panel wide">
-          <h2>Live Flow Stream</h2>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Source</th>
-                  <th>Destination</th>
-                  <th>Proto</th>
-                  <th>Sport</th>
-                  <th>Dport</th>
-                  <th>Prediction</th>
-                </tr>
-              </thead>
-              <tbody>
-                {flows.map((flow) => (
-                  <tr key={flow.id}>
-                    <td>{flow.timestamp?.slice(11, 19)}</td>
-                    <td>{flow.src_ip}</td>
-                    <td>{flow.dst_ip}</td>
-                    <td>{flow.protocol}</td>
-                    <td>{flow.sport}</td>
-                    <td>{flow.dport}</td>
-                    <td>
-                      <Badge value={flow.prediction} />
-                    </td>
-                  </tr>
+          <section className="content-grid">
+            <div className="panel wide">
+              <h2>Live Flow Stream</h2>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Source</th>
+                      <th>Destination</th>
+                      <th>Proto</th>
+                      <th>Sport</th>
+                      <th>Dport</th>
+                      <th>Prediction</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flows.map((flow) => (
+                      <tr key={flow.id}>
+                        <td>{flow.timestamp?.slice(11, 19)}</td>
+                        <td>{flow.src_ip}</td>
+                        <td>{flow.dst_ip}</td>
+                        <td>{flow.protocol}</td>
+                        <td>{flow.sport}</td>
+                        <td>{flow.dport}</td>
+                        <td>
+                          <Badge value={flow.prediction} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="panel">
+              <h2>Alerts</h2>
+              <div className="alert-list">
+                {alerts.length === 0 && <p className="empty">No alerts yet</p>}
+                {alerts.map((alert) => (
+                  <article className="alert" key={alert.id}>
+                    <strong>{alert.src_ip}</strong>
+                    <span>{alert.botnet_percentage?.toFixed(1)}% botnet flows</span>
+                    <small>{alert.timestamp?.slice(11, 19)}</small>
+                  </article>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </div>
+            </div>
+          </section>
 
-        <div className="panel">
-          <h2>Alerts</h2>
-          <div className="alert-list">
-            {alerts.length === 0 && <p className="empty">No alerts yet</p>}
-            {alerts.map((alert) => (
-              <article className="alert" key={alert.id}>
-                <strong>{alert.src_ip}</strong>
-                <span>{alert.botnet_percentage?.toFixed(1)}% botnet flows</span>
-                <small>{alert.timestamp?.slice(11, 19)}</small>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <h2>Host Monitoring</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Source IP</th>
-                <th>Total</th>
-                <th>Benign</th>
-                <th>Botnet</th>
-                <th>Botnet %</th>
-                <th>Status</th>
-                <th>Last seen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hosts.map((host) => (
-                <tr key={host.src_ip}>
-                  <td>{host.src_ip}</td>
-                  <td>{host.total_flows}</td>
-                  <td>{host.benign_flows}</td>
-                  <td>{host.botnet_flows}</td>
-                  <td>{host.botnet_percentage?.toFixed(1)}</td>
-                  <td>
-                    <Badge value={host.status} />
-                  </td>
-                  <td>{host.last_seen?.slice(11, 19)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <section className="panel">
+            <h2>Host Monitoring</h2>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Source IP</th>
+                    <th>Total</th>
+                    <th>Benign</th>
+                    <th>Botnet</th>
+                    <th>Botnet %</th>
+                    <th>Status</th>
+                    <th>Last seen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hosts.map((host) => (
+                    <tr key={host.src_ip}>
+                      <td>{host.src_ip}</td>
+                      <td>{host.total_flows}</td>
+                      <td>{host.benign_flows}</td>
+                      <td>{host.botnet_flows}</td>
+                      <td>{host.botnet_percentage?.toFixed(1)}</td>
+                      <td>
+                        <Badge value={host.status} />
+                      </td>
+                      <td>{host.last_seen?.slice(11, 19)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
     </main>
   );
 }

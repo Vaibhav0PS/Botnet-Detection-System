@@ -1,7 +1,7 @@
 """
 One-time sync of Kafka messages to database.
 """
-from backend.database import get_connection, init_db, insert_prediction, insert_alert, DB_PATH
+from backend.database import get_connection, init_db, insert_prediction, insert_alert, insert_packet, DB_PATH
 from streaming.kafka_utils import create_consumer
 import time
 
@@ -66,10 +66,38 @@ def main():
         print(f"[SYNC] Error: {e}")
     
     print(f"[SYNC] Total alerts inserted: {alert_count}")
+
+    # Consume raw packets
+    print("[SYNC] Reading raw packets from Kafka...")
+    packets_consumer = create_consumer(
+        "raw_packets",
+        "localhost:9092",
+        f"sync-packets-{int(time.time())}",
+        auto_offset_reset="earliest"
+    )
+    
+    packet_count = 0
+    start_time = time.time()
+    
+    try:
+        while time.time() - start_time < timeout:
+            msg_batch = packets_consumer.poll(timeout_ms=1000, max_records=100)
+            if not msg_batch:
+                break
+            
+            for topic_partition, messages in msg_batch.items():
+                for msg in messages:
+                    packet_count += 1
+                    insert_packet(conn, msg.value)
+    except Exception as e:
+        print(f"[SYNC] Error: {e}")
+    
+    print(f"[SYNC] Total raw packets inserted: {packet_count}")
     print("[SYNC] Sync complete!")
     
     predictions_consumer.close()
     alerts_consumer.close()
+    packets_consumer.close()
 
 if __name__ == "__main__":
     main()

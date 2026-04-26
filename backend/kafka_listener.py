@@ -24,6 +24,17 @@ def _listen_alerts(bootstrap_servers, topic, db_path):
         insert_alert(conn, msg.value)
 
 
+def _listen_packets(bootstrap_servers, topic, db_path):
+    from backend.database import insert_packet
+    conn = get_connection(db_path)
+    init_db(conn)
+    consumer = create_consumer(topic, bootstrap_servers, "dashboard-packets", auto_offset_reset="earliest")
+    print(f"[BACKEND] Listening to {topic} topic...")
+    for msg in consumer:
+        # Don't print every packet to avoid spamming the logs
+        insert_packet(conn, msg.value)
+
+
 def start_kafka_listeners(bootstrap_servers, predictions_topic, alerts_topic, db_path):
     threads = [
         threading.Thread(
@@ -34,6 +45,11 @@ def start_kafka_listeners(bootstrap_servers, predictions_topic, alerts_topic, db
         threading.Thread(
             target=_listen_alerts,
             args=(bootstrap_servers, alerts_topic, db_path),
+            daemon=True,
+        ),
+        threading.Thread(
+            target=_listen_packets,
+            args=(bootstrap_servers, "raw_packets", db_path),
             daemon=True,
         ),
     ]
