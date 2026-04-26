@@ -7,6 +7,9 @@ import {
   Database,
   MonitorDot,
   ShieldCheck,
+  Upload,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
 import {
   Bar,
@@ -92,6 +95,126 @@ function Badge({ value }) {
   return <span className={`badge ${value === "Botnet" ? "danger" : "safe"}`}>{value}</span>;
 }
 
+function UploadPanel() {
+  const [uploading, setUploading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setMessage("");
+    setError("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/upload-pcap`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage(data.message || "PCAP uploaded and processed successfully!");
+        // Auto-sync after 2 seconds
+        setTimeout(() => handleSync(), 2000);
+      } else {
+        setError(data.detail || "Upload failed");
+      }
+    } catch (err) {
+      setError("Failed to upload file: " + err.message);
+    } finally {
+      setUploading(false);
+      event.target.value = ""; // Reset file input
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const response = await fetch(`${API_BASE}/api/sync-database`, {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage("Database synced successfully!");
+      } else {
+        setError(data.detail || "Sync failed");
+      }
+    } catch (err) {
+      setError("Failed to sync: " + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleClear = async () => {
+    if (!confirm("Are you sure you want to clear all data?")) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/clear-data`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage("All data cleared!");
+      } else {
+        setError(data.detail || "Clear failed");
+      }
+    } catch (err) {
+      setError("Failed to clear data: " + err.message);
+    }
+  };
+
+  return (
+    <div className="upload-panel">
+      <div className="upload-actions">
+        <label className="upload-button">
+          <Upload size={16} />
+          {uploading ? "Uploading..." : "Upload PCAP"}
+          <input
+            type="file"
+            accept=".pcap,.pcapng"
+            onChange={handleFileUpload}
+            disabled={uploading}
+            style={{ display: "none" }}
+          />
+        </label>
+
+        <button
+          className="action-button sync"
+          onClick={handleSync}
+          disabled={syncing}
+        >
+          <RefreshCw size={16} className={syncing ? "spinning" : ""} />
+          {syncing ? "Syncing..." : "Sync Database"}
+        </button>
+
+        <button className="action-button danger" onClick={handleClear}>
+          <Trash2 size={16} />
+          Clear Data
+        </button>
+      </div>
+
+      {message && <div className="message success">{message}</div>}
+      {error && <div className="message error">{error}</div>}
+    </div>
+  );
+}
+
 function App() {
   const { summary, flows, hosts, alerts, timeseries, protocols, error } = usePollingData();
   const distribution = useMemo(
@@ -114,6 +237,8 @@ function App() {
           {error ? "API offline" : "Polling every 2s"}
         </div>
       </header>
+
+      <UploadPanel />
 
       <section className="stats-grid">
         <StatCard icon={Activity} label="Total flows" value={summary.total_flows} tone="blue" />

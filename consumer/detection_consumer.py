@@ -31,19 +31,29 @@ def run_detection_consumer(
     group_id="botnet-detector",
     models_dir="Models",
 ):
+    print(f"[CONSUMER] Starting detection consumer...")
+    print(f"[CONSUMER] Input topic: {input_topic}")
+    print(f"[CONSUMER] Predictions topic: {predictions_topic}")
+    print(f"[CONSUMER] Alerts topic: {alerts_topic}")
+    
     predictor = BotnetPredictor(models_dir=models_dir)
     aggregator = HostAggregator()
     consumer = create_consumer(input_topic, bootstrap_servers, group_id)
     producer = create_producer(bootstrap_servers)
+    
+    print(f"[CONSUMER] Waiting for messages...")
 
     for msg in consumer:
         event = msg.value
+        print(f"[CONSUMER] Received flow: {event.get('flow_id', 'unknown')}")
         records = [event["features"]]
         labels, _, _, _ = predictor.predict_records(records)
         if not labels:
+            print(f"[CONSUMER] No labels generated for flow")
             continue
 
         prediction_event = prediction_event_from_message(event, labels[0])
+        print(f"[CONSUMER] Publishing prediction: {prediction_event['prediction']} for {prediction_event['src_ip']}")
         producer.send(predictions_topic, key=prediction_event["flow_id"], value=prediction_event)
 
         host = aggregator.update(
@@ -53,6 +63,7 @@ def run_detection_consumer(
         )
         alert = aggregator.alert_for(host)
         if alert:
+            print(f"[CONSUMER] Publishing alert for {alert['src_ip']}")
             producer.send(alerts_topic, key=alert["src_ip"], value=alert)
         producer.flush()
 

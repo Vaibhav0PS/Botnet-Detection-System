@@ -7,16 +7,20 @@ from streaming.kafka_utils import create_consumer
 def _listen_predictions(bootstrap_servers, topic, db_path):
     conn = get_connection(db_path)
     init_db(conn)
-    consumer = create_consumer(topic, bootstrap_servers, "dashboard-predictions")
+    consumer = create_consumer(topic, bootstrap_servers, "dashboard-predictions", auto_offset_reset="earliest")
+    print(f"[BACKEND] Listening to {topic} topic...")
     for msg in consumer:
+        print(f"[BACKEND] Received prediction: {msg.value.get('flow_id', 'unknown')}")
         insert_prediction(conn, msg.value)
 
 
 def _listen_alerts(bootstrap_servers, topic, db_path):
     conn = get_connection(db_path)
     init_db(conn)
-    consumer = create_consumer(topic, bootstrap_servers, "dashboard-alerts")
+    consumer = create_consumer(topic, bootstrap_servers, "dashboard-alerts", auto_offset_reset="earliest")
+    print(f"[BACKEND] Listening to {topic} topic...")
     for msg in consumer:
+        print(f"[BACKEND] Received alert: {msg.value.get('src_ip', 'unknown')}")
         insert_alert(conn, msg.value)
 
 

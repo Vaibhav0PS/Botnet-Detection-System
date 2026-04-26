@@ -1,0 +1,102 @@
+================================================================================
+    BOTNET DETECTION SYSTEM - TEAM WORK DISTRIBUTION
+================================================================================
+
+MEMBER 1: ROHAN - ML & Detection Lead
+================================================================================
+RESPONSIBILITIES: Machine Learning, Feature Extraction, Model Training
+
+KEY FILES:
+  detector/feature_extractor.py    - PCAP parsing, flow extraction
+  detector/predictor.py             - ML prediction logic
+  detector/host_aggregator.py       - Host-level aggregation
+  detector/offline.py               - Offline workflow
+  Training_files/parser.py          - Training data parser
+  train_model.py                    - Model training
+  evaluate_model.py                 - Model evaluation
+  Models/*.pkl                      - ML model artifacts
+
+DELIVERABLES: Working ML models (>85% accuracy), feature extraction pipeline
+
+================================================================================
+MEMBER 2: VARAD - Streaming & Kafka Lead
+================================================================================
+RESPONSIBILITIES: Kafka Setup, Producer, Consumer, Real-time Pipeline
+
+KEY FILES:
+  producer/pcap_replay_producer.py  - PCAP replay to Kafka
+  consumer/detection_consumer.py    - ML prediction consumer
+  streaming/kafka_utils.py          - Kafka utilities
+  docker-compose.yml                - Kafka configuration
+  quick_sync.py                     - Database sync script
+
+DELIVERABLES: Working Kafka pipeline, producer/consumer integration
+
+================================================================================
+MEMBER 3: VAIBHAV - Backend & Database Lead
+================================================================================
+RESPONSIBILITIES: FastAPI Backend, Database, REST API, File Upload
+
+KEY FILES:
+  backend/main.py                   - FastAPI app, all endpoints
+  backend/database.py               - SQLite operations
+  backend/kafka_listener.py         - Background Kafka consumers
+  test_kafka_consumer.py            - Testing utilities
+
+DELIVERABLES: REST API (9 endpoints), SQLite database, file upload feature
+
+================================================================================
+MEMBER 4: SRUSHTI - Frontend & UI Lead
+================================================================================
+RESPONSIBILITIES: React Dashboard, UI/UX, Charts, Visualizations
+
+KEY FILES:
+  dashboard/frontend-app/src/main.jsx    - React application
+  dashboard/frontend-app/src/styles.css  - Complete styling
+  dashboard/frontend-app/index.html      - HTML template
+  demo_professional.html                 - Demo dashboard
+
+DELIVERABLES: React dashboard with 6 cards, 3 charts, upload interface
+
+================================================================================
+MEMBER 5: SUJAL - Integration & Documentation Lead
+================================================================================
+RESPONSIBILITIES: System Integration, Testing, Documentation
+
+KEY FILES:
+  botnetdetect.py                   - Main entry point
+  README.md                         - Project README
+  PROJECT_COMPLETE_DOCUMENTATION.txt - Full documentation
+  STREAMING_DASHBOARD_PLAN.md       - Architecture doc
+  run_new_pcap.py                   - Automation script
+  Sample_Testing/*.pcap             - Test files
+
+DELIVERABLES: Complete documentation, integration testing, user guides
+
+================================================================================
+TIMELINE (4 WEEKS)
+================================================================================
+Week 1: Core development (ML, Kafka, Backend, UI, Setup)
+Week 2: Integration & features (Consumer, API, Charts, Testing)
+Week 3: Advanced features (Aggregation, Sync, Upload, Polish)
+Week 4: Testing, bug fixes, documentation, presentation
+
+================================================================================
+DEPENDENCIES
+================================================================================
+Rohan → Varad:   Feature extraction ready for producer
+Rohan → Vaibhav: ML models ready for backend
+Varad → Vaibhav: Kafka topics defined for listeners
+Vaibhav → Srushti: API endpoints ready for dashboard
+All → Sujal:     Components ready for integration
+
+================================================================================
+SHARED RESPONSIBILITIES
+================================================================================
+✓ Code review for each other
+✓ Unit testing own modules
+✓ Code comments and documentation
+✓ Git commits with clear messages
+✓ Weekly meetings and standups
+
+================================================================================

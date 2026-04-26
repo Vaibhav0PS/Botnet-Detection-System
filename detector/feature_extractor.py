@@ -186,18 +186,52 @@ def flow_id_from_record(record):
 
 
 def _parse_packet(pkt_data):
-    ether_pkt = Ether(pkt_data)
-    if "type" not in ether_pkt.fields:
-        ether_pkt = CookedLinux(pkt_data)
-    if not hasattr(ether_pkt, "type") or ether_pkt.type != 0x0800:
+    """
+    Optimized packet parsing with error handling and timeout protection.
+    Returns None for invalid/unsupported packets.
+    """
+    try:
+        # Skip oversized packets (likely corrupted or fragmented)
+        if len(pkt_data) > 65535:
+            return None
+        
+        # Try Ethernet first
+        try:
+            ether_pkt = Ether(pkt_data)
+        except Exception:
+            # Fallback to Linux cooked capture
+            try:
+                ether_pkt = CookedLinux(pkt_data)
+            except Exception:
+                return None
+        
+        # Check if it's IPv4 (0x0800)
+        if not hasattr(ether_pkt, "type") or ether_pkt.type != 0x0800:
+            return None
+        
+        # Check if IP layer exists
+        if not ether_pkt.haslayer(IP):
+            return None
+        
+        ip_pkt = ether_pkt[IP]
+        
+        # Check for TCP or UDP
+        if ether_pkt.haslayer(TCP):
+            transport = ether_pkt[TCP]
+            protocol = "TCP"
+        elif ether_pkt.haslayer(UDP):
+            transport = ether_pkt[UDP]
+            protocol = "UDP"
+        else:
+            return None
+        
+        return ether_pkt, ip_pkt, transport, protocol
+        
+    except KeyboardInterrupt:
+        raise  # Allow user to stop
+    except Exception:
+        # Skip malformed packets silently
         return None
-
-    ip_pkt = ether_pkt[IP]
-    if TCP in ether_pkt:
-        transport = ether_pkt[TCP]
-        protocol = "TCP"
-    elif UDP in ether_pkt:
-        transport = ether_pkt[UDP]
         protocol = "UDP"
     else:
         return None
@@ -206,74 +240,107 @@ def _parse_packet(pkt_data):
 
 
 def add_packet_to_flows(pkt_data, pkt_metadata, flows):
+    """
+    Add packet to flows dictionary. Returns flow key or None if packet skipped.
+    """
     parsed = _parse_packet(pkt_data)
     if parsed is None:
         return None
 
-    ether_pkt, ip_pkt, transport, protocol = parsed
-    src_ip = ip_pkt.src
-    dst_ip = ip_pkt.dst
-    sport = transport.sport
-    dport = transport.dport
-    key = f"{src_ip}_{dst_ip}_{sport}_{dport}_{protocol}"
+    try:
+        ether_pkt, ip_pkt, transport, protocol = parsed
+        src_ip = ip_pkt.src
+        dst_ip = ip_pkt.dst
+        sport = transport.sport
+        dport = transport.dport
+        key = f"{src_ip}_{dst_ip}_{sport}_{dport}_{protocol}"
 
-    if key not in flows:
-        flows[key] = Flow()
-        flows[key].src_ip = src_ip
-        flows[key].dst_ip = dst_ip
-        flows[key].sport = sport
-        flows[key].dport = dport
-        flows[key].protocol = protocol
+        if key not in flows:
+            flows[key] = Flow()
+            flows[key].src_ip = src_ip
+            flows[key].dst_ip = dst_ip
+            flows[key].sport = sport
+            flows[key].dport = dport
+            flows[key].protocol = protocol
 
-    flow = flows[key]
-    current_time_stamp = ether_pkt.time * flow.MICROSECOND
-    flow.total_num_packets += 1
-    if flow.total_num_packets == 1:
-        flow.first_packet_timestamp = current_time_stamp
-    else:
-        flow.inter_arrival_times.append(current_time_stamp - flow.last_packet_timestamp)
-    flow.last_packet_timestamp = current_time_stamp
-    flow.total_size_taken += len(pkt_data)
-    flow.packet_size.append(len(pkt_data))
-
-    is_null_packet = False
-    if protocol == "TCP":
-        if isinstance(transport.payload, NoPayload):
-            flow.null_packets += 1
-            is_null_packet = True
+        flow = flows[key]
+        current_time_stamp = ether_pkt.time * flow.MICROSECOND
+        flow.total_num_packets += 1
+        if flow.total_num_packets == 1:
+            flow.first_packet_timestamp = current_time_stamp
         else:
-            flow.tcp_payload += len(transport.payload)
-    elif protocol == "UDP":
-        if isinstance(transport.payload, NoPayload):
-            flow.null_packets += 1
-            is_null_packet = True
-        else:
-            flow.udp_payload += len(transport.payload)
+            flow.inter_arrival_times.append(current_time_stamp - flow.last_packet_timestamp)
+        flow.last_packet_timestamp = current_time_stamp
+        flow.total_size_taken += len(pkt_data)
+        flow.packet_size.append(len(pkt_data))
 
-    if not is_null_packet and len(ether_pkt) < flow.SMALL_PACKET_THRESHOLD:
-        flow.small_packets += 1
+        is_null_packet = False
+        if protocol == "TCP":
+            if isinstance(transport.payload, NoPayload):
+                flow.null_packets += 1
+                is_null_packet = True
+            else:
+                flow.tcp_payload += len(transport.payload)
+        elif protocol == "UDP":
+            if isinstance(transport.payload, NoPayload):
+                flow.null_packets += 1
+                is_null_packet = True
+            else:
+                flow.udp_payload += len(transport.payload)
 
-    flow.packet_length.append(pkt_metadata.wirelen)
-    flow.count += 1
-    return key
+        if not is_null_packet and len(ether_pkt) < flow.SMALL_PACKET_THRESHOLD:
+            flow.small_packets += 1
+
+        flow.packet_length.append(pkt_metadata.wirelen)
+        flow.count += 1
+        return key
+        
+    except (AttributeError, KeyError, TypeError):
+        # Skip packets with missing/invalid fields
+        return None
+    except KeyboardInterrupt:
+        raise  # Allow user to stop
+    except Exception:
+        # Skip any other errors silently
+        return None
 
 
-def extract_flows_from_pcap(file_path, verbose=False):
+def extract_flows_from_pcap(file_path, verbose=False, max_packets=None):
     start = time.process_time()
     flows = {}
     if verbose:
         print("generating features for:", file_path)
+    
+    packet_count = 0
+    skipped_count = 0
 
     for pkt_data, pkt_metadata in RawPcapReader(file_path):
-        add_packet_to_flows(pkt_data, pkt_metadata, flows)
+        packet_count += 1
+        
+        # Progress indicator every 1000 packets
+        if verbose and packet_count % 1000 == 0:
+            print(f"  Processed {packet_count} packets, {len(flows)} flows...")
+        
+        # Optional packet limit for testing
+        if max_packets and packet_count > max_packets:
+            if verbose:
+                print(f"  Reached packet limit ({max_packets}), stopping...")
+            break
+        
+        result = add_packet_to_flows(pkt_data, pkt_metadata, flows)
+        if result is None:
+            skipped_count += 1
 
     if verbose:
         file_size = float(os.stat(file_path).st_size) / float(1024 * 1024)
         time_taken = float(time.process_time() - start)
-        print("File Size:", file_size, "MB")
-        print("Time taken", time_taken)
+        print(f"  File Size: {file_size:.2f} MB")
+        print(f"  Packets processed: {packet_count}")
+        print(f"  Packets skipped: {skipped_count}")
+        print(f"  Flows extracted: {len(flows)}")
+        print(f"  Time taken: {time_taken:.2f}s")
         if time_taken:
-            print("Speed:", file_size / time_taken, "MB/s")
+            print(f"  Speed: {file_size / time_taken:.2f} MB/s")
     return flows
 
 

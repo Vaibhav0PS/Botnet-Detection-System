@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Botnet Stream Monitor - Live Demo</title>
+    <style>
+        :root {
+            color: #1f2933;
+            background: #eef3f5;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+        }
+
+        .app-shell {
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .topbar {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 760;
+            margin: 0;
+        }
+
+        h2 {
+            font-size: 16px;
+            margin: 0 0 14px 0;
+        }
+
+        .topbar p {
+            color: #607080;
+            margin-top: 4px;
+        }
+
+        .connection-state {
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid #d7e0e6;
+            border-radius: 8px;
+            display: flex;
+            gap: 8px;
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+
+        .dot {
+            background: #26734d;
+            border-radius: 50%;
+            display: inline-block;
+            height: 10px;
+            width: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stats-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(6, minmax(140px, 1fr));
+            margin-bottom: 18px;
+        }
+
+        .stat-card, .panel {
+            background: #ffffff;
+            border: 1px solid #d7e0e6;
+            border-radius: 8px;
+            box-shadow: 0 10px 28px rgba(39, 57, 74, 0.06);
+        }
+
+        .stat-card {
+            align-items: center;
+            display: flex;
+            gap: 12px;
+            min-height: 86px;
+            padding: 16px;
+        }
+
+        .stat-card p {
+            color: #607080;
+            font-size: 13px;
+        }
+
+        .stat-card strong {
+            display: block;
+            font-size: 26px;
+            margin-top: 4px;
+        }
+
+        .stat-icon {
+            align-items: center;
+            border-radius: 8px;
+            display: flex;
+            height: 38px;
+            justify-content: center;
+            width: 38px;
+            font-size: 20px;
+        }
+
+        .blue .stat-icon {
+            background: #e6f3f9;
+            color: #1f6f8b;
+        }
+
+        .green .stat-icon {
+            background: #e7f4ed;
+            color: #26734d;
+        }
+
+        .red .stat-icon {
+            background: #fae9e7;
+            color: #b42318;
+        }
+
+        .teal .stat-icon {
+            background: #e4f4f3;
+            color: #19706a;
+        }
+
+        .amber .stat-icon {
+            background: #fff3d8;
+            color: #8a5a00;
+        }
+
+        .gray .stat-icon {
+            background: #eef1f4;
+            color: #52616f;
+        }
+
+        .content-grid {
+            display: grid;
+            gap: 18px;
+            margin-bottom: 18px;
+            grid-template-columns: 2fr 1fr;
+        }
+
+        .panel {
+            min-width: 0;
+            padding: 18px;
+        }
+
+        .wide {
+            min-height: 360px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            max-height: 320px;
+        }
+
+        table {
+            border-collapse: collapse;
+            min-width: 760px;
+            width: 100%;
+        }
+
+        th, td {
+            border-bottom: 1px solid #e5ebef;
+            font-size: 13px;
+            padding: 10px 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th {
+            color: #607080;
+            font-weight: 650;
+        }
+
+        .badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: 12px;
+            font-weight: 700;
+            justify-content: center;
+            min-width: 66px;
+            padding: 4px 8px;
+        }
+
+        .badge.safe {
+            background: #e7f4ed;
+            color: #26734d;
+        }
+
+        .badge.danger {
+            background: #fae9e7;
+            color: #b42318;
+        }
+
+        .alert-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .alert {
+            border: 1px solid #f3c5be;
+            border-radius: 8px;
+            display: grid;
+            gap: 4px;
+            padding: 12px;
+        }
+
+        .alert strong {
+            color: #1f2933;
+        }
+
+        .alert span, .alert small {
+            color: #607080;
+            font-size: 12px;
+        }
+
+        .empty {
+            color: #607080;
+            font-size: 14px;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .flow-row {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @media (max-width: 1100px) {
+            .stats-grid, .content-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="app-shell">
+        <header class="topbar">
+            <div>
+                <h1>Botnet Stream Monitor</h1>
+                <p>Live flow predictions from replayed PCAP traffic</p>
+            </div>
+            <div class="connection-state">
+                <span class="dot"></span>
+                Polling every 2s
+            </div>
+        </header>
+
+        <section class="stats-grid">
+            <div class="stat-card blue">
+                <div class="stat-icon">⚡</div>
+                <div>
+                    <p>Total flows</p>
+                    <strong id="totalFlows">0</strong>
+                </div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-icon">✓</div>
+                <div>
+                    <p>Benign flows</p>
+                    <strong id="benignFlows">0</strong>
+                </div>
+            </div>
+            <div class="stat-card red">
+                <div class="stat-icon">⚠</div>
+                <div>
+                    <p>Botnet flows</p>
+                    <strong id="botnetFlows">0</strong>
+                </div>
+            </div>
+            <div class="stat-card teal">
+                <div class="stat-icon">●</div>
+                <div>
+                    <p>Total hosts</p>
+                    <strong id="totalHosts">0</strong>
+                </div>
+            </div>
+            <div class="stat-card amber">
+                <div class="stat-icon">⬤</div>
+                <div>
+                    <p>Botnet hosts</p>
+                    <strong id="botnetHosts">0</strong>
+                </div>
+            </div>
+            <div class="stat-card gray">
+                <div class="stat-icon">📊</div>
+                <div>
+                    <p>Active alerts</p>
+                    <strong id="activeAlerts">0</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-grid">
+            <div class="panel wide">
+                <h2>Live Flow Stream</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                                <th>Proto</th>
+                                <th>Sport</th>
+                                <th>Dport</th>
+                                <th>Prediction</th>
+                            </tr>
+                        </thead>
+                        <tbody id="flowTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Alerts</h2>
+                <div class="alert-list" id="alertList">
+                    <p class="empty">No alerts yet</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Simulated data
+        const ips = [
+            '10.0.2.15', '192.168.1.100', '172.16.0.50',
+            '66.61.90.112', '125.167.3.52', '76.169.10.92',
+            '99.45.226.110', '187.126.56.144', '189.141.148.12',
+            '74.125.23.139', '183.57.48.18', '66.150.188.209',
+            '108.87.184.9', '82.231.139.51'
+        ];
+
+        const protocols = ['TCP', 'UDP'];
+        const commonPorts = [80, 443, 22, 53, 8080, 1222, 1223, 1224, 1225];
+
+        let stats = {
+            totalFlows: 0,
+            benignFlows: 0,
+            botnetFlows: 0,
+            totalHosts: 0,
+            botnetHosts: 0,
+            activeAlerts: 0
+        };
+
+        let flows = [];
+        let alerts = [];
+        let hostSet = new Set();
+        let botnetHostSet = new Set();
+
+        function randomItem(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        function randomPort() {
+            return Math.random() < 0.7 ? randomItem(commonPorts) : Math.floor(Math.random() * 60000) + 1024;
+        }
+
+        function getTime() {
+            const now = new Date();
+            return now.toTimeString().slice(0, 8);
+        }
+
+        function generateFlow() {
+            const isBotnet = Math.random() < 0.30; // 30% botnet
+            const srcIP = randomItem(ips);
+            const dstIP = randomItem(ips.filter(ip => ip !== srcIP));
+            const protocol = randomItem(protocols);
+            const sport = randomPort();
+            const dport = randomPort();
+
+            stats.totalFlows++;
+            if (isBotnet) {
+                stats.botnetFlows++;
+                botnetHostSet.add(srcIP);
+            } else {
+                stats.benignFlows++;
+            }
+
+            hostSet.add(srcIP);
+            stats.totalHosts = hostSet.size;
+            stats.botnetHosts = botnetHostSet.size;
+
+            const flow = {
+                time: getTime(),
+                srcIP,
+                dstIP,
+                protocol,
+                sport,
+                dport,
+                prediction: isBotnet ? 'Botnet' : 'Benign',
+                isBotnet
+            };
+
+            flows.unshift(flow);
+            if (flows.length > 20) {
+                flows.pop();
+            }
+
+            // Generate alert
+            if (isBotnet && Math.random() < 0.25) {
+                generateAlert(srcIP);
+            }
+
+            updateUI();
+        }
+
+        function generateAlert(ip) {
+            stats.activeAlerts++;
+
+            const alert = {
+                ip,
+                percentage: (Math.random() * 50 + 50).toFixed(1),
+                time: getTime()
+            };
+
+            alerts.unshift(alert);
+            if (alerts.length > 5) {
+                alerts.pop();
+            }
+        }
+
+        function updateUI() {
+            // Update stats
+            document.getElementById('totalFlows').textContent = stats.totalFlows;
+            document.getElementById('benignFlows').textContent = stats.benignFlows;
+            document.getElementById('botnetFlows').textContent = stats.botnetFlows;
+            document.getElementById('totalHosts').textContent = stats.totalHosts;
+            document.getElementById('botnetHosts').textContent = stats.botnetHosts;
+            document.getElementById('activeAlerts').textContent = stats.activeAlerts;
+
+            // Update flow table
+            const flowTable = document.getElementById('flowTable');
+            flowTable.innerHTML = flows.map(flow => `
+                <tr class="flow-row">
+                    <td>${flow.time}</td>
+                    <td>${flow.srcIP}</td>
+                    <td>${flow.dstIP}</td>
+                    <td>${flow.protocol}</td>
+                    <td>${flow.sport}</td>
+                    <td>${flow.dport}</td>
+                    <td><span class="badge ${flow.isBotnet ? 'danger' : 'safe'}">${flow.prediction}</span></td>
+                </tr>
+            `).join('');
+
+            // Update alerts
+            const alertList = document.getElementById('alertList');
+            if (alerts.length === 0) {
+                alertList.innerHTML = '<p class="empty">No alerts yet</p>';
+            } else {
+                alertList.innerHTML = alerts.map(alert => `
+                    <article class="alert">
+                        <strong>${alert.ip}</strong>
+                        <span>${alert.percentage}% botnet flows</span>
+                        <small>${alert.time}</small>
+                    </article>
+                `).join('');
+            }
+        }
+
+        // Initialize with some data
+        function init() {
+            for (let i = 0; i < 8; i++) {
+                generateFlow();
+            }
+        }
+
+        // Start simulation
+        init();
+        setInterval(generateFlow, 1200); // New flow every 1.2 seconds
+    </script>
+</body>
+</html>

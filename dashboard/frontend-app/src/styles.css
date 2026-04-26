@@ -228,6 +228,108 @@ th {
   color: #607080;
 }
 
+.upload-panel {
+  background: #ffffff;
+  border: 1px solid #d7e0e6;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(39, 57, 74, 0.06);
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.upload-button,
+.action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid #d7e0e6;
+  background: #ffffff;
+  color: #1f2933;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-button:hover,
+.action-button:hover {
+  background: #f7f9fa;
+  border-color: #b8c5d0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(39, 57, 74, 0.1);
+}
+
+.upload-button:active,
+.action-button:active {
+  transform: translateY(0);
+}
+
+.upload-button:disabled,
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-button.sync {
+  background: #e6f3f9;
+  border-color: #1f6f8b;
+  color: #1f6f8b;
+}
+
+.action-button.sync:hover {
+  background: #d0e8f2;
+}
+
+.action-button.danger {
+  background: #fae9e7;
+  border-color: #b42318;
+  color: #b42318;
+}
+
+.action-button.danger:hover {
+  background: #f3d5d1;
+}
+
+.message {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.message.success {
+  background: #e7f4ed;
+  color: #26734d;
+  border: 1px solid #26734d;
+}
+
+.message.error {
+  background: #fae9e7;
+  color: #b42318;
+  border: 1px solid #b42318;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 1100px) {
   .stats-grid,
   .chart-grid,

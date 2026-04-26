@@ -30,3 +30,4 @@ dashboard/frontend-app/node_modules/
 dashboard/frontend-app/dist/
 logs/
 *.log
+uploads/
